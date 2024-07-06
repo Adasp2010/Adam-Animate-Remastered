@@ -1,19 +1,18 @@
 const formidable = require('formidable');
-const parse = require('../data/parse');
-const fUtil = require('../fileUtil');
+const sessions = require('../data/sessions');
+const asset = require('./main');
 const fs = require('fs');
 
 module.exports = function (req, res, url) {
-	if (req.method != 'POST' || url.path != '/upload_movie') return;
+	if (req.method != 'POST' || url.path != '/upload_asset/') return;
 	new formidable.IncomingForm().parse(req, (e, f, files) => {
 		const path = files.import.path, buffer = fs.readFileSync(path);
-		const numId = fUtil.getNextFileId('movie-', '.xml');
-		parse.unpackXml(buffer, numId);
-		fs.unlinkSync(path);
+		const mId = sessions.get(req).movieId;
 
-		res.statusCode = 302;
-		const url = `/go_full?movieId=m-${numId}`;
-		res.setHeader('Location', url);
+		const name = files.import.name;
+		const suffix = name.substr(name.lastIndexOf('.'));
+		asset.saveLocal(buffer, mId, suffix);
+		fs.unlinkSync(path);
 		res.end();
 	});
 	return true;
