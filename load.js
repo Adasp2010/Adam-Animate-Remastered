@@ -1,28 +1,36 @@
-const stuff = require('./info');
-const fs = require('fs');
+const movie = require('./main');
+const base = Buffer.alloc(1, 0);
 
 module.exports = function (req, res, url) {
-	const methodLinks = stuff[req.method];
-	for (let linkIndex in methodLinks) {
-		var regex = new RegExp(linkIndex);
-		if (regex.test(url.path)) {
-			const t = methodLinks[linkIndex];
-			const link = t.regexLink ? url.path.replace(
-				regex, t.regexLink) : (t.link || url.path);
-			const headers = t.headers;
+	switch (req.method) {
+		case 'GET': {
+			const match = req.url.match(/\/movies\/([^.]+)(?:\.(zip|xml))?$/);
+			if (!match) return;
 
-			try {
-				for (var headerName in headers || {})
-					res.setHeader(headerName, headers[headerName]);
-				res.statusCode = t.statusCode || 200;
-				if (t.content !== undefined) res.end(t.content);
-				else fs.createReadStream(`./${link}`).pipe(res);
-			}
-			catch (e) {
-				res.statusCode = t.statusCode || 404, res.end();
+			var id = match[1], ext = match[2];
+			switch (ext) {
+				case 'zip':
+					res.setHeader('Content-Type', 'application/zip');
+					movie.loadZip(id).then(v => { res.statusCode = 200, res.end(v) })
+						.catch(e => { res.statusCode = 404, res.end() })
+					break;
+				default:
+					res.setHeader('Content-Type', 'text/xml');
+					movie.loadXml(id).then(v => { res.statusCode = 200, res.end(v) })
+						.catch(e => { res.statusCode = 404, res.end() })
 			}
 			return true;
 		}
+
+		case 'POST': {
+			if (!url.path.startsWith('/goapi/getMovie/')) return;
+			res.setHeader('Content-Type', 'application/zip');
+
+			movie.loadZip(url.query.movieId).then(b =>
+				res.end(Buffer.concat([base, b]))
+			).catch(e => res.end('1'));
+			return true;
+		}
+		default: return;
 	}
-	return false;
 }
