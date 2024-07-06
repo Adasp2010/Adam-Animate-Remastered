@@ -1,18 +1,28 @@
-const loadPost = require('../request/post_body');
-const folder = process.env.THEME_FOLDER;
-const fUtil = require('../fileUtil');
+const stuff = require('./info');
+const fs = require('fs');
 
 module.exports = function (req, res, url) {
-	if (req.method != 'POST' || url.path != '/goapi/getTheme/') return;
-	loadPost(req, res).then(data => {
-		var theme = data.themeId;
-		switch (theme) {
-			case 'family':
-				theme = 'custom';
-				break;
+	const methodLinks = stuff[req.method];
+	for (let linkIndex in methodLinks) {
+		var regex = new RegExp(linkIndex);
+		if (regex.test(url.path)) {
+			const t = methodLinks[linkIndex];
+			const link = t.regexLink ? url.path.replace(
+				regex, t.regexLink) : (t.link || url.path);
+			const headers = t.headers;
+
+			try {
+				for (var headerName in headers || {})
+					res.setHeader(headerName, headers[headerName]);
+				res.statusCode = t.statusCode || 200;
+				if (t.content !== undefined) res.end(t.content);
+				else fs.createReadStream(`./${link}`).pipe(res);
+			}
+			catch (e) {
+				res.statusCode = t.statusCode || 404, res.end();
+			}
+			return true;
 		}
-		res.setHeader('Content-Type', 'application/zip');
-		fUtil.zippy(`${folder}/${theme}.xml`, 'theme.xml').then(b => res.end(b));
-	});
-	return true;
+	}
+	return false;
 }
